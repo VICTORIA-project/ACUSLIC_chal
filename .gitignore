@@ -1,3 +1,5 @@
+# custom directories
 data/
+
 # ignore pycache
 global-exclude __pycache__
