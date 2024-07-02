@@ -1,5 +1,6 @@
 # custom directories
 data/
+SAMed/
 
 # ignore pycache
 global-exclude __pycache__
