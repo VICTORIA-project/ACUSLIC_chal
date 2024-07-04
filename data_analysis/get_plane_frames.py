@@ -46,8 +46,8 @@ def main():
 
     # new images and labels
     save_dir = repo_path / 'data/preprocessed' / new_folder_name
-    im_dir = save_dir / f'images'
-    label_dir = save_dir / f'masks'
+    im_dir = save_dir / f'images_{file_format}'
+    label_dir = save_dir / f'masks_{file_format}'
     save_dir.mkdir(exist_ok=True)
     im_dir.mkdir(exist_ok=True)
     label_dir.mkdir(exist_ok=True)
@@ -83,7 +83,7 @@ def main():
             im_slice = np.asarray(im_slice)
             # put channel first and repeat in RGB
             im_slice = np.repeat(np.expand_dims(im_slice, axis=0), 3, axis=0)
-            im_slice = im_slice.astype(np.uint8)
+            im_slice = im_slice.astype(np.int32)
 
             # preprocess label
             label_slice = Image.fromarray(label[z])
@@ -91,10 +91,10 @@ def main():
             # low resolution is needed for checking if there is still a lesion
             low_label_slice = low_res_trans(label_slice)
             low_label_slice = np.asarray(low_label_slice)
-            label_slice = np.asarray(label_slice).astype(np.uint8)
+            label_slice = np.asarray(label_slice).astype(np.int32)
             plane_type = label_slice.max()
-            # send label value to 255
-            label_slice[label_slice>0] = 255
+            # send label value to 1
+            label_slice[label_slice>0] = 1
             # check if there is still a lesion
             if not np.any(label_slice): # it could disappear after preprocessing
                 print(f'Nothing in the label')
@@ -104,7 +104,7 @@ def main():
                 continue
 
             # saving path
-            save_name = ex_name.replace('.mha', f'_z{z}_plane_{plane_type}.png')
+            save_name = ex_name.replace('.mha', f'_z{z}_plane_{plane_type}.mha')
             # save image
             sitk.WriteImage(sitk.GetImageFromArray(im_slice), str(im_dir / save_name))
             # save label

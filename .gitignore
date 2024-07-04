@@ -1,6 +1,8 @@
 # custom directories
 data/
 SAMed/
+checkpoints/
+results/
 
 # ignore pycache
 global-exclude __pycache__
