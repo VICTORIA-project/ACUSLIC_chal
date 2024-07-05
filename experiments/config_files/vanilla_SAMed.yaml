@@ -15,7 +15,7 @@ base_lr: 0.001
 num_classes: 1
 train_batch_size: 16
 max_epoch: 100
-val_batch_size: 24
+val_batch_size: 32
 multimask_output: true
 warmup: false
 warmup_period: 1000

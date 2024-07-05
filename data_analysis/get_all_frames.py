@@ -28,7 +28,7 @@ def main():
     x_resizing = 256
     y_resizing = 256
     file_format = 'mha'
-    new_folder_name = f'full-slice_{x_resizing}x{y_resizing}_with-plane'
+    new_folder_name = f'full-slice_{x_resizing}x{y_resizing}'
     original_im_dir = repo_path / 'data/original/images/stacked_fetal_ultrasound'
     original_mask_dir = repo_path / 'data/original/masks/stacked_fetal_abdomen'
 
@@ -73,9 +73,8 @@ def main():
             im = np.concatenate((im, np.zeros((im.shape[0], y_expansion-im.shape[1], im.shape[2]), dtype=np.int8)), axis=1)
             label = np.concatenate((label, np.zeros((label.shape[0], y_expansion-label.shape[1], label.shape[2]), dtype=np.int8)), axis=1)
 
-        # z values (frames) wıth plane
-        z_values = np.unique(np.where(label>0)[0])
-        for z in z_values:
+        # go through all z values (framkes)
+        for z in range(im.shape[0]):
             # preprocess image
             im_slice = Image.fromarray(im[z])
             im_slice = preprocess_im(im_slice)
@@ -87,20 +86,11 @@ def main():
             # preprocess label
             label_slice = Image.fromarray(label[z])
             label_slice = preprocess_label(label_slice)
-            # low resolution is needed for checking if there is still a lesion
-            low_label_slice = low_res_trans(label_slice)
-            low_label_slice = np.asarray(low_label_slice)
             label_slice = np.asarray(label_slice).astype(np.int32)
+            # save plane type
             plane_type = label_slice.max()
             # send label value to 1
             label_slice[label_slice>0] = 1
-            # check if there is still a lesion
-            if not np.any(label_slice): # it could disappear after preprocessing
-                print(f'Nothing in the label')
-                continue
-            if not np.any(low_label_slice): # it could disappear after low resolution
-                print(f'Nothing in the low label')
-                continue
 
             # saving path
             save_name = ex_name.replace('.mha', f'_z{z}_plane_{plane_type}.{file_format}')
