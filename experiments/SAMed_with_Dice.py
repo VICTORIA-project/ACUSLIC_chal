@@ -383,70 +383,70 @@ def main(args:argparse.Namespace, fold_n:int, train_ids:list, val_ids:list, meta
         # update learning rate
         scheduler.step(val_loss_ce_mean+val_loss_dice_mean)
         
-        print('start dice')
-        # dice computing
-        patients_jaccard = np.zeros((len(val_ids), 2))
-        patients_dice = np.zeros((len(val_ids), 2))
-        validation_counter = tqdm(range(len(val_ids)), desc="Validation", unit="patient")
-        for pat_num in range(len(val_ids)):
-            pat_id = [val_ids[pat_num]]
-            # get data for validation again
-            full_val_path = repo_path / 'data/preprocessed/full-slice_256x256'
-            image_files = np.array([str(i) for i in (full_val_path / 'images_mha').rglob("*.mha")])
-            label_files = np.array([str(i) for i in (full_val_path / 'masks_mha').rglob("*.mha")])
-            ##
-            val_subjects = metadata[metadata['subject_id'].isin(metadata['subject_id'].unique()[pat_id])] # <-- get only one patient in validation
-            val_file_name = val_subjects['uuid'].unique()
-            val_images = [file for file in image_files if any(f'{name_file}' in file for name_file in val_file_name)]
-            val_labels = [file for file in label_files if any(f'{name_file}' in file for name_file in val_file_name)]
-            list_val = [val_images, val_labels]
-            ##
-            db_val_dice = Acouslic_dataset(transform=val_transform,list_dir=list_val)
-            valloader_dice = DataLoader(db_val_dice, batch_size=args.val_batch_size, shuffle=False, num_workers=8, pin_memory=True)
+        # print('start dice')
+        # # dice computing
+        # patients_jaccard = np.zeros((len(val_ids), 2))
+        # patients_dice = np.zeros((len(val_ids), 2))
+        # validation_counter = tqdm(range(len(val_ids)), desc="Validation", unit="patient")
+        # for pat_num in range(len(val_ids)):
+        #     pat_id = [val_ids[pat_num]]
+        #     # get data for validation again
+        #     full_val_path = repo_path / 'data/preprocessed/full-slice_256x256'
+        #     image_files = np.array([str(i) for i in (full_val_path / 'images_mha').rglob("*.mha")])
+        #     label_files = np.array([str(i) for i in (full_val_path / 'masks_mha').rglob("*.mha")])
+        #     ##
+        #     val_subjects = metadata[metadata['subject_id'].isin(metadata['subject_id'].unique()[pat_id])] # <-- get only one patient in validation
+        #     val_file_name = val_subjects['uuid'].unique()
+        #     val_images = [file for file in image_files if any(f'{name_file}' in file for name_file in val_file_name)]
+        #     val_labels = [file for file in label_files if any(f'{name_file}' in file for name_file in val_file_name)]
+        #     list_val = [val_images, val_labels]
+        #     ##
+        #     db_val_dice = Acouslic_dataset(transform=val_transform,list_dir=list_val)
+        #     valloader_dice = DataLoader(db_val_dice, batch_size=args.val_batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
-            labels_array = []
-            preds_array = []
-            for sample_batch in valloader_dice:
-                with torch.no_grad():
-                    # get data
-                    image_batch, label_batch = sample_batch["image"].to(device), sample_batch["label"].to(device)
-                    # forward and losses computing
-                    outputs = model(image_batch, True, image_size = args.image_size)
-                    output_masks = outputs['masks'].detach().cpu()
-                    output_masks = torch.argmax(torch.softmax(output_masks, dim=1), dim=1, keepdim=False)
+        #     labels_array = []
+        #     preds_array = []
+        #     for sample_batch in valloader_dice:
+        #         with torch.no_grad():
+        #             # get data
+        #             image_batch, label_batch = sample_batch["image"].to(device), sample_batch["label"].to(device)
+        #             # forward and losses computing
+        #             outputs = model(image_batch, True, image_size = args.image_size)
+        #             output_masks = outputs['masks'].detach().cpu()
+        #             output_masks = torch.argmax(torch.softmax(output_masks, dim=1), dim=1, keepdim=False)
 
-                #label_batch and output_masks in array
-                image_batch = image_batch[:,0].cpu().numpy()
-                label_batch = label_batch.cpu().numpy()
-                output_masks = output_masks.cpu().numpy()
-                # append to list
-                labels_array.append(label_batch)
-                preds_array.append(output_masks)
+        #         #label_batch and output_masks in array
+        #         image_batch = image_batch[:,0].cpu().numpy()
+        #         label_batch = label_batch.cpu().numpy()
+        #         output_masks = output_masks.cpu().numpy()
+        #         # append to list
+        #         labels_array.append(label_batch)
+        #         preds_array.append(output_masks)
                 
-            # get 3D jaccard score
-            labels_array = np.concatenate(labels_array)
-            preds_array = np.concatenate(preds_array)
-            jaccard_value = jaccard_score(labels_array.flatten(), preds_array.flatten())
-            # dice from jaccard
-            dice_value = 2*jaccard_value/(1+jaccard_value)
-            # log patient dice
-            accelerator.log({f'patient_{pat_id[0]}_dice': dice_value}, step=iter_num)
-            # store in array
-            patients_jaccard[pat_num, 0] = pat_id[0]
-            patients_jaccard[pat_num, 1] = jaccard_value
-            patients_dice[pat_num, 0] = pat_id[0]
-            patients_dice[pat_num, 1] = dice_value
+        #     # get 3D jaccard score
+        #     labels_array = np.concatenate(labels_array)
+        #     preds_array = np.concatenate(preds_array)
+        #     jaccard_value = jaccard_score(labels_array.flatten(), preds_array.flatten())
+        #     # dice from jaccard
+        #     dice_value = 2*jaccard_value/(1+jaccard_value)
+        #     # log patient dice
+        #     accelerator.log({f'patient_{pat_id[0]}_dice': dice_value}, step=iter_num)
+        #     # store in array
+        #     patients_jaccard[pat_num, 0] = pat_id[0]
+        #     patients_jaccard[pat_num, 1] = jaccard_value
+        #     patients_dice[pat_num, 0] = pat_id[0]
+        #     patients_dice[pat_num, 1] = dice_value
             
-            validation_counter.update(1) # <--- counter
-        # compute mean dice
-        mean_dice = np.mean(patients_dice[:, 1])
-        accelerator.log({'mean_dice': mean_dice}, step=iter_num)
+        #     validation_counter.update(1) # <--- counter
+        # # compute mean dice
+        # mean_dice = np.mean(patients_dice[:, 1])
+        # accelerator.log({'mean_dice': mean_dice}, step=iter_num)
 
 
         # saving model
-        if (val_loss_dice_mean < best_performance) or (mean_dice > best_dice):
+        if (val_loss_dice_mean < best_performance): #or (mean_dice > best_dice):
             best_performance=val_loss_dice_mean
-            best_dice = mean_dice
+            # best_dice = mean_dice
             save_mode_path = os.path.join(lora_weights, f'epoch_{str(epoch_num)}.pth')
             try:
                 model.save_lora_parameters(save_mode_path)
@@ -479,5 +479,5 @@ if __name__ == '__main__':
     metadata = pd.read_csv(repo_path / 'data/original/metadata.csv')
     
     for fold_n, (train_ids, val_ids) in enumerate(kf.split(metadata['subject_id'].unique())):
-        main(fold_n, train_ids, val_ids, args, metadata)
+        main(args =args, fold_n=fold_n, train_ids=train_ids, val_ids=val_ids, metadata=metadata)
         break # only one fold for now

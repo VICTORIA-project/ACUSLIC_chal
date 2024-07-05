@@ -1,5 +1,5 @@
 # settings:
-run_name: vanilla_ACOUSLIC-_val-all
+run_name: vanilla_ACOUSLIC-no_dice
 from_fold: 0
 data_path: data/preprocessed/full-slice_256x256_with-plane
 pretrained_path: null
