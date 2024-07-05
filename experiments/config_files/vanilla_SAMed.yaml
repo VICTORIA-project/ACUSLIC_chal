@@ -1,0 +1,26 @@
+# settings:
+run_name: vanilla_ACOUSLIC
+from_fold: 0
+data_path: data/preprocessed/full-slice_256x256_with-plane
+pretrained_path: null
+report_to: wandb
+
+# split
+num_folds: 5
+split_shuffle: true
+split_seed: 0
+
+# training
+base_lr: 0.001
+num_classes: 1
+train_batch_size: 16
+max_epoch: 100
+val_batch_size: 24
+multimask_output: true
+warmup: false
+warmup_period: 1000
+training_seed: 42
+
+# memory efficiency
+gradient_accumulation_steps: 1
+mixed_precision: fp16

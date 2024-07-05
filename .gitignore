@@ -3,6 +3,7 @@ data/
 SAMed/
 checkpoints/
 results/
-
+wandb/
+__pycache__
 # ignore pycache
 global-exclude __pycache__
