@@ -1,5 +1,5 @@
 # settings:
-run_name: vanilla_ACOUSLIC
+run_name: vanilla_ACOUSLIC-_val-all
 from_fold: 0
 data_path: data/preprocessed/full-slice_256x256_with-plane
 pretrained_path: null
@@ -9,6 +9,9 @@ report_to: wandb
 num_folds: 5
 split_shuffle: true
 split_seed: 0
+
+# dataset
+image_size: 256
 
 # training
 base_lr: 0.001

@@ -76,23 +76,22 @@ def calc_loss(outputs, low_res_label_batch, ce_loss, dice_loss, dice_weight:floa
 
 logger = get_logger(__name__)
 
-def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, metadata:pd.DataFrame):
+def main(args:argparse.Namespace, fold_n:int, train_ids:list, val_ids:list, metadata:pd.DataFrame):
     """main function needs split fold number and train and val ids
 
     Args:
+        args (argparse.Namespace): experiment settings
         fold_n (int): fold number
-        train_ids (list): list with train ids, ints
-        val_ids (list): list with val ids, ints
+        train_ids (list): list of train ids
+        val_ids (list): list of validation ids
+        metadata (pd.DataFrame): metadata dataframe
     """
-    
-    run_name = args.run_name   
-
     # paths
     experiment_path = Path.cwd().resolve() # where the script is running
     data_path = repo_path / args.data_path # path to data
     checkpoint_dir = repo_path / 'checkpoints' # SAMed checkpoints
-    project_dir = experiment_path / f'results/{run_name}/fold{fold_n}/logs' # path for logging
-    lora_weights = experiment_path / f'results/{run_name}/fold{fold_n}/weights' # the lora parameters folder is created to save the weights
+    project_dir = experiment_path / f'results/{args.run_name }/fold{fold_n}/logs' # path for logging
+    lora_weights = experiment_path / f'results/{args.run_name }/fold{fold_n}/weights' # the lora parameters folder is created to save the weights
     os.makedirs(lora_weights,exist_ok=True)
 
     # accelerator
@@ -104,19 +103,21 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
         project_dir=project_dir, # defined above
         project_config=accelerator_project_config, # project config defined above
     )
-    # Make one log on every process with the configuration for debugging.
+    # logging configuration, till info level
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         level=logging.INFO,
     )
-
+    # log the accelerator configuration state
     logger.info(accelerator.state, main_process_only=False)
+    
     # training seed
     if args.training_seed is not None:
         set_seed(args.training_seed) # accelerate seed
         logger.info(f"Set seed {args.training_seed} for training.")
-    # Transforms
+    
+    # Transformations for data augmentation
     deform = Rand2DElasticd(
         keys=["image", "label"],
         prob=0.5,
@@ -160,7 +161,7 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
             OneOf(transforms=[affine, deform], weights=[0.8, 0.2]), # apply one of the two transforms with the given weights
             ##
 
-            Resized(keys=["image", "label"], spatial_size=(256, 256),mode=['area','nearest']),
+            Resized(keys=["image", "label"], spatial_size=(args.image_size, args.image_size),mode=['area','nearest']),
 
             EnsureTyped(keys=["image"] ), # ensure it is a torch tensor or np array
         ]
@@ -173,17 +174,17 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
 
             ScaleIntensityd(keys=["image"]),
 
-            Resized(keys=["image", "label"], spatial_size=(256, 256),mode=['area','nearest']),
+            Resized(keys=["image", "label"], spatial_size=(args.image_size, args.image_size),mode=['area','nearest']),
             EnsureTyped(keys=["image"])
         ])
 
-    ### DATA ###
-    image_files = np.array([str(i) for i in (data_path / 'images_mha').rglob("*.mha")])
+    ### DATA LOADING###
+    image_files = np.array([str(i) for i in (data_path / 'images_mha').rglob("*.mha")]) # get all files in the images folder
     label_files = np.array([str(i) for i in (data_path / 'masks_mha').rglob("*.mha")])
 
     # get the file name (uuid) of all the train subjects
-    train_subjects = metadata[metadata['subject_id'].isin(metadata['subject_id'].unique()[train_ids])]
-    train_file_name = train_subjects['uuid'].unique()
+    train_subjects = metadata[metadata['subject_id'].isin(metadata['subject_id'].unique()[train_ids])] # extract training subjects based on id
+    train_file_name = train_subjects['uuid'].unique() # get uuids of train subjects
     train_images = [file for file in image_files if any(f'{name_file}' in file for name_file in train_file_name)]
     train_labels = [file for file in label_files if any(f'{name_file}' in file for name_file in train_file_name)]
     list_train = [train_images, train_labels]
@@ -195,16 +196,15 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
     val_labels = [file for file in label_files if any(f'{name_file}' in file for name_file in val_file_name)]
     list_val = [val_images, val_labels]
 
-    # define datasets, notice that the inder depends on the fold
+    # define datasets and dataloaders
     db_train = Acouslic_dataset(transform=train_transform,list_dir=list_train)
     db_val = Acouslic_dataset(transform=val_transform,list_dir=list_val)
 
-    # define dataloaders
     trainloader = DataLoader(db_train, batch_size=args.train_batch_size, shuffle=True, num_workers=8, pin_memory=True)
     valloader = DataLoader(db_val, batch_size=args.val_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
     # get SAM model
-    sam, _ = sam_model_registry['vit_b'](image_size=256,
+    sam, _ = sam_model_registry['vit_b'](image_size=args.image_size,
                                         num_classes=args.num_classes,
                                         checkpoint=str(checkpoint_dir / 'sam_vit_b_01ec64.pth'),
                                         pixel_mean=[0, 0, 0],
@@ -277,7 +277,7 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
                 assert image_batch.max() <= 3, f'image_batch max: {image_batch.max()}' #check the intensity range of the image
                 
                 # forward and loss computing
-                outputs = model(batched_input = image_batch, multimask_output = args.multimask_output, image_size = 256)
+                outputs = model(batched_input = image_batch, multimask_output = args.multimask_output, image_size = args.image_size)
                 loss, loss_ce, loss_dice = calc_loss(outputs, low_res_label_batch, ce_loss, dice_loss, 0.8)
                 accelerator.backward(loss)
                 optimizer.step()
@@ -298,8 +298,6 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
                 optimizer.zero_grad()
 
             if accelerator.sync_gradients: # update iter number
-                # progress_bar.update(1)
-                # update the iter number
                 iter_num += 1 
 
             # logging
@@ -309,8 +307,6 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
             # append lists
             train_loss_ce.append(loss_ce.detach().cpu().numpy())
             train_loss_dice.append(loss_dice.detach().cpu().numpy())
-            # show to user
-            # logging.info(f'iteration {iter_num} : loss : {loss.item()}, loss_ce: {loss_ce.item()}, loss_dice: {loss_dice.item()} ,lr:{optimizer.param_groups[0]["lr"]}')
             
             if iter_num % 200 == 0: # log training examples every 20 iterations
                 # image
@@ -350,7 +346,7 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
             assert image_batch.max() <= 3, f'image_batch max: {image_batch.max()}'
             
             # forward and losses computing
-            outputs = model(image_batch, args.multimask_output, 256)
+            outputs = model(image_batch, args.multimask_output, image_size = args.image_size)
             loss, loss_ce, loss_dice = calc_loss(outputs, low_res_label_batch, ce_loss, dice_loss, 0.8)
             # append lists
             val_loss_ce.append(loss_ce.detach().cpu().numpy())
@@ -395,8 +391,9 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
         for pat_num in range(len(val_ids)):
             pat_id = [val_ids[pat_num]]
             # get data for validation again
-            image_files = np.array([str(i) for i in (data_path / 'images_mha').rglob("*.mha")])
-            label_files = np.array([str(i) for i in (data_path / 'masks_mha').rglob("*.mha")])
+            full_val_path = repo_path / 'data/preprocessed/full-slice_256x256'
+            image_files = np.array([str(i) for i in (full_val_path / 'images_mha').rglob("*.mha")])
+            label_files = np.array([str(i) for i in (full_val_path / 'masks_mha').rglob("*.mha")])
             ##
             val_subjects = metadata[metadata['subject_id'].isin(metadata['subject_id'].unique()[pat_id])] # <-- get only one patient in validation
             val_file_name = val_subjects['uuid'].unique()
@@ -414,7 +411,7 @@ def main(fold_n:int, train_ids:list, val_ids:list, args:argparse.Namespace, meta
                     # get data
                     image_batch, label_batch = sample_batch["image"].to(device), sample_batch["label"].to(device)
                     # forward and losses computing
-                    outputs = model(image_batch, True, 256)
+                    outputs = model(image_batch, True, image_size = args.image_size)
                     output_masks = outputs['masks'].detach().cpu()
                     output_masks = torch.argmax(torch.softmax(output_masks, dim=1), dim=1, keepdim=False)
 
