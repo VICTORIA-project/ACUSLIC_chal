@@ -87,9 +87,9 @@ def main(args:argparse.Namespace, fold_n:int, train_ids:list, val_ids:list, meta
         metadata (pd.DataFrame): metadata dataframe
     """
     # paths
-    experiment_path = Path.cwd().resolve() # where the script is running
     data_path = repo_path / args.data_path # path to data
     checkpoint_dir = repo_path / 'checkpoints' # SAMed checkpoints
+    experiment_path = Path.cwd().resolve() # where the script is running
     project_dir = experiment_path / f'results/{args.run_name }/fold{fold_n}/logs' # path for logging
     lora_weights = experiment_path / f'results/{args.run_name }/fold{fold_n}/weights' # the lora parameters folder is created to save the weights
     os.makedirs(lora_weights,exist_ok=True)
@@ -211,10 +211,9 @@ def main(args:argparse.Namespace, fold_n:int, train_ids:list, val_ids:list, meta
                                         pixel_std=[1, 1, 1])
     # load lora model
     pkg = import_module('sam_lora_image_encoder')
-    net = pkg.LoRA_Sam(sam, 4) # lora rank is 4
+    model = pkg.LoRA_Sam(sam, 4) # lora rank is 4
     if args.pretrained_path: # load pretrained weights
-        net.load_lora_parameters(str(repo_path / args.pretrained_path))
-    model=net
+        model.load_lora_parameters(str(repo_path / args.pretrained_path))
     model.train()
     
     # metrics
@@ -480,4 +479,3 @@ if __name__ == '__main__':
     
     for fold_n, (train_ids, val_ids) in enumerate(kf.split(metadata['subject_id'].unique())):
         main(args =args, fold_n=fold_n, train_ids=train_ids, val_ids=val_ids, metadata=metadata)
-        break # only one fold for now
