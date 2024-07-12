@@ -1,7 +1,7 @@
 # ACUSLIC-AI challenge submission from ViCOROB team
 
 Important dates:
-- Final Test phase: 15-31 July
+- Final Test phase: 15 July - 7 August
 - Results announcement: 15 August
 
 
