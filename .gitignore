@@ -3,3 +3,5 @@ data/
 
 # ignore pycache
 global-exclude __pycache__
+
+src.egg-info/
