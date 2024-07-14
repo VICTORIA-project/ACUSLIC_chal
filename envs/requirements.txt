@@ -66,7 +66,7 @@ nest_asyncio
 networkx 
 nibabel 
 ninja==1.11.1.1
--e git+https://hadiiiil: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@github.com/xmed-lab/TriALS.git@3d1a29f72df6cd01448b8aa83e8f09fde8a9cb93#egg=nnunetv2
+nnunetv2==2.2.1
 numpy 
 opencv-python==4.10.0.84
 packaging 
