@@ -17,6 +17,7 @@ decorator
 dicom2nifti==2.4.11
 dynamic_network_architectures==0.3.1
 einops 
+evalutils==0.4.2
 exceptiongroup 
 executing 
 filelock 
@@ -32,7 +33,7 @@ huggingface-hub==0.23.4
 hyperframe 
 icecream 
 idna 
-imagecodecs==2024.6.1
+imagecodecs
 imageio 
 importlib_metadata 
 importlib_resources 
@@ -56,7 +57,7 @@ lazy_loader==0.4
 linecache2==1.0.0
 mamba-ssm==1.2.0.post1
 MarkupSafe 
-matplotlib==3.9.0
+matplotlib
 matplotlib-inline 
 MedPy 
 monai==1.3.0
@@ -66,7 +67,7 @@ nest_asyncio
 networkx 
 nibabel 
 ninja==1.11.1.1
-nnunetv2==2.2.1
+-e git+https://github.com/xmed-lab/TriALS.git@3d1a29f72df6cd01448b8aa83e8f09fde8a9cb93#egg=nnunetv2
 numpy 
 opencv-python==4.10.0.84
 packaging 
