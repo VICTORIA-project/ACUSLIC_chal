@@ -1,15 +1,15 @@
-# Build the Docker image: (already exist on rackmic2 under the name acouslic)
-Go to the directory where the Dockerfile is and run:
-docker build -t your-algorithm-container .
+## Build the Docker image: (already exist on rackmic2 under the name acouslic)
+Navigate to the location where the Dockerfile is and run:
+`docker build -t your-algorithm-container .`
 
-# Test the container locally:
-Make sure that "./test_run.sh" is executable by running:
-chmod +x ./test_run.sh 
+## Test the container locally:
+Make sure that `./test_run.sh` is executable by running:
+`chmod +x ./test_run.sh` 
 Then:
-./test_run.sh
+`./test_run.sh`
 
-# Exporting the Container for Deployment:
-docker save test | gzip -c > test.tar.gz
+## Exporting the Container for Deployment:
+`docker save test | gzip -c > test.tar.gz`
 
 _______________________________________________________________________________
 # ACOUSLIC-AI baseline algorithm
