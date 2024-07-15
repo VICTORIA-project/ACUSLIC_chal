@@ -1,6 +1,4 @@
-## Build the Docker image: (already exist on rackmic2 under the name acouslic)
-Navigate to the location where the Dockerfile is and run:
-`docker build -t your-algorithm-container .`
+Navigate to the location where the Dockerfile is:
 
 ## Test the container locally:
 Make sure that `./test_run.sh` is executable by running:
