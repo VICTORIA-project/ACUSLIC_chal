@@ -29,18 +29,20 @@ WORKDIR /opt/app
 # |---- checkpoint_final.pth
 COPY --chown=user:user resources /opt/app/resources
 
-COPY --chown=user:user requirements.txt /opt/app/
+# Copy the setup.py file and nnunetv2 folder to the container
+COPY --chown=user:user setup.py /opt/app/
+COPY --chown=user:user nnunetv2 /opt/app/nnunetv2
 
-# You can add any Python dependencies to requirements.txt
-RUN python -m pip install \
-    --user \
-    --no-cache-dir \
-    --no-color \
-    --requirement /opt/app/requirements.txt
+# Install the application and its dependencies using setup.py
+RUN python -m pip install --user --no-cache-dir /opt/app
 
 # Copy the inference script, the postprocessing script and utils to the container
 COPY --chown=user:user inference.py /opt/app/
 COPY --chown=user:user postprocess_probability_maps.py /opt/app/
 COPY --chown=user:user model.py /opt/app/
+COPY --chown=user:user test_run.sh /opt/app/
+
+# Ensure the script has executable permissions
+RUN chmod +x /opt/app/test_run.sh
 
 ENTRYPOINT ["python", "inference.py"]
