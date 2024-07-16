@@ -1,6 +1,11 @@
 import torch
 import torch.nn as nn
+from torch import Tensor
+import math
 from src.models.fuvai import YNet
+from torch.nn.utils.rnn import pad_sequence
+from typing import List
+
 
 class SimpleDenseNet(nn.Module):
     """A simple fully-connected neural net for computing predictions."""
@@ -13,14 +18,7 @@ class SimpleDenseNet(nn.Module):
         lin3_size: int = 256,
         output_size: int = 10,
     ) -> None:
-        """Initialize a `SimpleDenseNet` module.
-
-        :param input_size: The number of input features.
-        :param lin1_size: The number of output features of the first linear layer.
-        :param lin2_size: The number of output features of the second linear layer.
-        :param lin3_size: The number of output features of the third linear layer.
-        :param output_size: The number of output features of the final linear layer.
-        """
+        
         super().__init__()
 
         self.model = nn.Sequential(
@@ -60,6 +58,7 @@ class YNetEncoder(nn.Module):
         self.down_conv4 = pretrained_model.down_conv4
         self.max_pool_2x2 = pretrained_model.max_pool_2x2
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
+        self.out_channels = self.down_conv4[3].out_channels
         
     def forward(self, x):
         # x shape: (batch_size, 1, 1, 256, 256)
@@ -77,14 +76,105 @@ class YNetEncoder(nn.Module):
         data = torch.flatten(data, -3)
         return data.squeeze()
 
+
+def create_mask(src, padding_value=0):
+    src_seq_len = src.shape[1]
+    src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
+    src_padding_mask = (src == padding_value)
+   
+    return src_mask, src_padding_mask
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self,
+                 emb_size: int,
+                 dropout: float,
+                 maxlen: int = 5000,
+                 postype: str = 'learnable'):
+        super(PositionalEncoding, self).__init__()
+
+        if postype == 'learnable':
+            self.pos_embedding = nn.Parameter(torch.zeros(1, maxlen, emb_size))
+        elif postype == 'sin_cos':
+            den = torch.exp(- torch.arange(0, emb_size, 2)* math.log(10000) / emb_size)
+            pos = torch.arange(0, maxlen).reshape(maxlen, 1)
+            pos_embedding = torch.zeros((maxlen, emb_size))
+            pos_embedding[:, 0::2] = torch.sin(pos * den)
+            pos_embedding[:, 1::2] = torch.cos(pos * den)
+            pos_embedding = pos_embedding.unsqueeze(0)  # batch size first
+            self.register_buffer('pos_embedding', pos_embedding)
+        else:
+            raise NameError(f'Param type {postype} is not implemented.')
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, token_embedding: Tensor):
+        return self.dropout(token_embedding + self.pos_embedding[:, :token_embedding.size(1), :])
+    
+
+class Transformer(nn.Module):
+    def __init__(self,
+                 hidden_dim=512,
+                 nheads=6,
+                 num_encoder_layers=6,
+                 maxlenght=840,
+                 pos_embed: str = 'learnable',
+                 padding_value=0):
+        
+        super().__init__()
+        self.padding_value = padding_value
+        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim,
+                                                   nhead=nheads,
+                                                   dim_feedforward=2048,
+                                                   dropout=0.1,
+                                                   batch_first=True)
+        encoder_norm = nn.LayerNorm(hidden_dim)
+        self.model = nn.TransformerEncoder(encoder_layer,
+                                           num_encoder_layers,
+                                           encoder_norm)
+        
+        self.pos_embed = PositionalEncoding(emb_size=hidden_dim,
+                                            dropout=0.1,
+                                            maxlen=maxlenght,
+                                            postype=pos_embed)
+        
+    def forward(self, x: List[Tensor]):
+        # (batch, seq, feature)
+        B = len(x)
+        x = pad_sequence(x, batch_first=True,
+                         padding_value=self.padding_value)
+        x = self.pos_embed(x)
+
+        # make masks
+        src_mask, src_padding_mask = create_mask(x, self.padding_value)
+
+        return self.model(x, src_mask=src_mask,
+                          src_key_padding_mask=src_padding_mask)
+
+
 class DETRdemo(nn.Module):
-    def __init__(self, num_classes, hidden_dim=512, nheads=8,
-                 num_encoder_layers=6, num_decoder_layers=6):
+    def __init__(self,
+                 pretrained_encoder,
+                 num_classes=3,
+                 hidden_dim=512,
+                 nheads=8,
+                 num_encoder_layers=6,
+                 maxlenght=840):
         super().__init__()
 
-        self.backbone = YNetEncoder(YNet())
-        # create a default PyTorch transformer
-        self.transformer = nn.Transformer(
-            hidden_dim, nheads, num_encoder_layers, num_decoder_layers)
+        # ckpt_path = data_path / 'fuvai_weights.pt'
+        # model = YNet(1, 64, 1)
+        # ckpt = torch.load(ckpt_path)
+        # model.load_state_dict(ckpt)
+        self.backbone = pretrained_encoder  # YNetEncoder(YNet())
+
+        self.transformer = Transformer()
+
+        self.proj = nn.Linear(self.backbone.out_channels,
+                              hidden_dim)
+
         self.linear_class = SimpleDenseNet(hidden_dim,
-                                           256, 256, 256, num_classes)
+                                           256,
+                                           256,
+                                           256,
+                                           num_classes)

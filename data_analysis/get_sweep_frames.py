@@ -85,24 +85,28 @@ def main():
         # z_values = np.unique(np.where(label>0)[0])
         for z in z_values:
             frame_metadata = {}
-            # preprocess image
-            im_slice = Image.fromarray(im[z])
-            im_slice = preprocess_im(im_slice)
-            im_slice = np.asarray(im_slice)
-            # put channel first and repeat in RGB
-            im_slice = np.repeat(np.expand_dims(im_slice, axis=0), 3, axis=0)
-            im_slice = im_slice.astype(np.int32)
 
-            # preprocess label
+
+            # # preprocess image
+            # im_slice = Image.fromarray(im[z])
+            # im_slice = preprocess_im(im_slice)
+            # im_slice = np.asarray(im_slice)
+            # # put channel first and repeat in RGB
+            # im_slice = np.repeat(np.expand_dims(im_slice, axis=0), 3, axis=0)
+            # im_slice = im_slice.astype(np.int32)
+
+            # # preprocess label
             label_slice = Image.fromarray(label[z])
             label_slice = preprocess_label(label_slice)
-            # low resolution is needed for checking if there is still a lesion
-            low_label_slice = low_res_trans(label_slice)
-            low_label_slice = np.asarray(low_label_slice)
+            # # low resolution is needed for checking if there is still a lesion
+            # low_label_slice = low_res_trans(label_slice)
+            # low_label_slice = np.asarray(low_label_slice)
             label_slice = np.asarray(label_slice).astype(np.int32)
             plane_type = label_slice.max()
-            # send label value to 1
-            label_slice[label_slice>0] = 1
+            # # send label value to 1
+            # label_slice[label_slice>0] = 1
+
+
             # check if there is still a lesion
             # if not np.any(label_slice): # it could disappear after preprocessing
             #     print(f'Nothing in the label')
@@ -114,12 +118,17 @@ def main():
             # saving path
             save_name = ex_name.replace('.mha', f'_z{z}_plane_{plane_type}.{file_format}')
             frame_metadata['uuid'] = ex_row['uuid']
+            frame_metadata['subject_id'] = ex_row['subject_id']
             frame_metadata['frame_z'] = z
             frame_metadata['plane_type'] = plane_type
-            # save image
-            sitk.WriteImage(sitk.GetImageFromArray(im_slice), str(im_dir / save_name))
-            # save label
-            sitk.WriteImage(sitk.GetImageFromArray(label_slice), str(label_dir / save_name))
+            frame_metadata['file_name'] = save_name
+            frame_metadata['number_of_frames'] = len(z_values)
+
+
+            # # save image
+            # sitk.WriteImage(sitk.GetImageFromArray(im_slice), str(im_dir / save_name))
+            # # save label
+            # sitk.WriteImage(sitk.GetImageFromArray(label_slice), str(label_dir / save_name))
             new_metadata.append(frame_metadata)
         counter.update(1)
     pd.DataFrame(new_metadata).to_csv(save_dir / 'metadata.csv', index=False)
