@@ -385,13 +385,13 @@ class nnUNetTrainer(object):
             # todo revisit this parametrization
             if max(patch_size) / min(patch_size) > 1.5:
                 rotation_for_DA = {
-                    'x': (-15. / 360 * 2. * np.pi, 15. / 360 * 2. * np.pi),
+                    'x': (0, 0),
                     'y': (0, 0),
                     'z': (0, 0)
                 }
             else:
                 rotation_for_DA = {
-                    'x': (-180. / 360 * 2. * np.pi, 180. / 360 * 2. * np.pi),
+                    'x': (0, 0),
                     'y': (0, 0),
                     'z': (0, 0)
                 }
@@ -413,7 +413,7 @@ class nnUNetTrainer(object):
                     'y': (-30. / 360 * 2. * np.pi, 30. / 360 * 2. * np.pi),
                     'z': (-30. / 360 * 2. * np.pi, 30. / 360 * 2. * np.pi),
                 }
-            mirror_axes = (0, 1, 2)
+            mirror_axes = (0,1,3)
         else:
             raise RuntimeError()
 
@@ -699,7 +699,7 @@ class nnUNetTrainer(object):
         tr_transforms.append(SpatialTransform(
             patch_size_spatial, patch_center_dist_from_border=None,
             do_elastic_deform=False, alpha=(0, 0), sigma=(0, 0),
-            do_rotation=True, angle_x=rotation_for_DA['x'], angle_y=rotation_for_DA['y'], angle_z=rotation_for_DA['z'],
+            do_rotation=False, angle_x=rotation_for_DA['x'], angle_y=rotation_for_DA['y'], angle_z=rotation_for_DA['z'],
             p_rot_per_axis=1,  # todo experiment with this
             do_scale=True, scale=(0.7, 1.4),
             border_mode_data="constant", border_cval_data=0, order_data=order_resampling_data,
@@ -724,8 +724,8 @@ class nnUNetTrainer(object):
         tr_transforms.append(GammaTransform((0.7, 1.5), True, True, retain_stats=True, p_per_sample=0.1))
         tr_transforms.append(GammaTransform((0.7, 1.5), False, True, retain_stats=True, p_per_sample=0.3))
 
-        if mirror_axes is not None and len(mirror_axes) > 0:
-            tr_transforms.append(MirrorTransform(mirror_axes))
+        # if mirror_axes is not None and len(mirror_axes) > 0:
+        #     tr_transforms.append(MirrorTransform(mirror_axes))
 
         if use_mask_for_norm is not None and any(use_mask_for_norm):
             tr_transforms.append(MaskTransform([i for i in range(len(use_mask_for_norm)) if use_mask_for_norm[i]],
@@ -1121,7 +1121,7 @@ class nnUNetTrainer(object):
         self.set_deep_supervision_enabled(False)
         self.network.eval()
 
-        predictor = nnUNetPredictor(tile_step_size=0.5, use_gaussian=True, use_mirroring=True,
+        predictor = nnUNetPredictor(tile_step_size=0.5, use_gaussian=True, use_mirroring=False,
                                     perform_everything_on_device=True, device=self.device, verbose=False,
                                     verbose_preprocessing=False, allow_tqdm=False)
         predictor.manual_initialization(self.network, self.plans_manager, self.configuration_manager, None,

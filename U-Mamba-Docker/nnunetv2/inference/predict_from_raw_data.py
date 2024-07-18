@@ -39,7 +39,7 @@ class nnUNetPredictor(object):
     def __init__(self,
                  tile_step_size: float = 0.5,
                  use_gaussian: bool = True,
-                 use_mirroring: bool = True,
+                 use_mirroring: bool = False,
                  perform_everything_on_device: bool = True,
                  device: torch.device = torch.device('cuda'),
                  verbose: bool = False,
@@ -518,7 +518,7 @@ class nnUNetPredictor(object):
         return slicers
 
     def _internal_maybe_mirror_and_predict(self, x: torch.Tensor) -> torch.Tensor:
-        mirror_axes = self.allowed_mirroring_axes if self.use_mirroring else None
+        mirror_axes = None #self.allowed_mirroring_axes if self.use_mirroring else None
         if 'SAMed' in self.trainer_name:
             prediction = self.network(x, True, self.configuration_manager.patch_size[-1])['masks']
 
@@ -868,7 +868,7 @@ if __name__ == '__main__':
     predictor = nnUNetPredictor(
         tile_step_size=0.5,
         use_gaussian=True,
-        use_mirroring=True,
+        use_mirroring=False,
         perform_everything_on_device=True,
         device=torch.device('cuda', 0),
         verbose=False,
@@ -915,4 +915,3 @@ if __name__ == '__main__':
     #                              num_processes_preprocessing=2, num_processes_segmentation_export=2,
     #                              folder_with_segs_from_prev_stage='/media/isensee/data/nnUNet_raw/Dataset003_Liver/imagesTs_predlowres',
     #                              num_parts=1, part_id=0)
-

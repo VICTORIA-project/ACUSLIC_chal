@@ -4,3 +4,8 @@ data/
 # ignore pycache
 global-exclude __pycache__
 
+U-Mamba-Docker/resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_0/checkpoint_final.pth
+U-Mamba-Docker/resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_1/checkpoint_final.pth
+U-Mamba-Docker/resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_3/checkpoint_final.pth
+U-Mamba-Docker/resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_4/checkpoint_final.pth
+U-Mamba-Docker/resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_2/checkpoint_final.pth
