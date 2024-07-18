@@ -5,6 +5,12 @@ import math
 from src.models.fuvai import YNet
 from torch.nn.utils.rnn import pad_sequence
 from typing import List
+from pathlib import Path
+import os
+
+repo_path= Path.cwd().resolve()
+while '.gitignore' not in os.listdir(repo_path): # while not in the root of the repo
+    repo_path = repo_path.parent #go up one level
 
 
 class SimpleDenseNet(nn.Module):
@@ -40,7 +46,7 @@ class SimpleDenseNet(nn.Module):
         :param x: The input tensor.
         :return: A tensor of predictions.
         """
-        batch_size, channels, width, height = x.size()
+        batch_size = x.shape[0]
 
         # (batch, 1, width, height) -> (batch, 1*width*height)
         x = x.view(batch_size, -1)
@@ -77,10 +83,11 @@ class YNetEncoder(nn.Module):
         return data.squeeze()
 
 
-def create_mask(src, padding_value=0):
+def create_mask(src, pad_value=0):
     src_seq_len = src.shape[1]
-    src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
-    src_padding_mask = (src == padding_value)
+    src_mask = torch.zeros((src_seq_len, src_seq_len), device=src.device).type(torch.bool)
+    src_padding_mask = torch.any(src == pad_value, dim=(2))
+    #(src == padding_value)
    
     return src_mask, src_padding_mask
 
@@ -140,16 +147,18 @@ class Transformer(nn.Module):
         
     def forward(self, x: List[Tensor]):
         # (batch, seq, feature)
-        B = len(x)
         x = pad_sequence(x, batch_first=True,
                          padding_value=self.padding_value)
-        x = self.pos_embed(x)
-
         # make masks
         src_mask, src_padding_mask = create_mask(x, self.padding_value)
 
-        return self.model(x, src_mask=src_mask,
-                          src_key_padding_mask=src_padding_mask)
+        # add positional encoding
+        x = self.pos_embed(x)       
+
+        x = self.model(x, mask=src_mask,
+                       src_key_padding_mask=src_padding_mask)
+        
+        return x, src_padding_mask
 
 
 class DETRdemo(nn.Module):
@@ -178,3 +187,30 @@ class DETRdemo(nn.Module):
                                            256,
                                            256,
                                            num_classes)
+
+
+def build_models(hidden_dim=768):
+
+    # load pretrained model and freeze
+    ckpt_path = repo_path / 'data' / 'fuvai_weights.pt'
+    pretrained_model = YNet(1, 64, 1)
+    ckpt = torch.load(ckpt_path)
+    pretrained_model.load_state_dict(ckpt)
+
+    encoder = YNetEncoder(pretrained_model=pretrained_model)
+    encoder.eval()
+    for param in encoder.parameters():
+        param.requires_grad = False
+
+    # projection layer
+    proj = nn.Linear(encoder.out_channels,
+                     hidden_dim)
+
+    # transformer
+    transformer = Transformer(hidden_dim=hidden_dim)
+
+    # classifier
+    classifier = SimpleDenseNet(input_size=hidden_dim,
+                                output_size=3)
+
+    return encoder, proj, transformer, classifier
