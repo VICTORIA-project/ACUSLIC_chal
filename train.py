@@ -17,6 +17,8 @@ import pandas as pd
 from timeit import default_timer as timer
 from src.models.frame_detector import build_models
 from src.datasets.acouslic_dataset import AcouslicDatasetFull
+import wandb
+from torchmetrics.classification import Accuracy
 
 this_path = Path().resolve()
 repo_path = Path.cwd().resolve()
@@ -42,6 +44,21 @@ def main():
     lr = 1e-4
     weights = torch.Tensor([0.3441, 32.8396, 15.6976]).to(DEVICE)
     workers = 2
+
+    config = {
+            "hidden_dim": hidden_dim,
+            "batch_size": batch_size,
+            "lr": lr,
+            "loss_weights": weights,
+            "n_workers": workers
+        }
+    run = wandb.init(
+            project="cat-classification",
+            notes="My first experiment",
+            tags=["baseline", "paper1"],
+            config=config,
+            settings=wandb.Settings(code_dir=".")
+        )
 
     # create dataset
     metadata_path = data_path / 'circumferences/fetal_abdominal_circumferences_per_sweep.csv'
@@ -107,7 +124,7 @@ def main():
                                  criterion,
                                  train_dl)
         end_time = timer()
-        val_loss = evaluate(encoder,
+        val_loss, acc_avg, acc = evaluate(encoder,
                             projector,
                             transformer,
                             classifier,
@@ -115,7 +132,7 @@ def main():
                             val_dl)
 
         print((f'Epoch: {epoch}, Train loss: {train_loss:.3f}, '
-               f'Val loss: {val_loss:.3f}, '
+               f'Val loss: {val_loss:.3f}, acc_avg: {acc_avg}, avg: {acc}'
                f'Epoch time (total) = {(end_time - start_time):.3f}s'))
 
 
@@ -131,9 +148,9 @@ def train_epoch(encoder,
     transformer.train()
     classifier.train()
 
+    acc_metric_avg = Accuracy(task='multiclass', num_classes=3, average='macro')
     losses = 0
     n_frames = 0
-    print('Starting epoch loop')
     for samples in tqdm(dataloader, total=len(dataloader)):
         # print(type(samples), samples[0]['image'].shape, samples[1]['image'].shape)
         # model fwd
@@ -158,12 +175,15 @@ def train_epoch(encoder,
 
         loss = criterion(logits, labels)
         loss.backward()
+        preds = nn.functional.softmax(logits, dim=1)
+        acc_avg = acc_metric_avg(preds, labels)
 
         optimizer.step()
         losses += loss.item()
         n_frames += len(labels)
+        wandb.log({"train_loss": loss.item(), "train_acc": acc_avg})
 
-    return losses / n_frames
+    return losses / n_frames, acc_metric_avg.compute()
 
 
 def evaluate(encoder,
@@ -179,6 +199,8 @@ def evaluate(encoder,
 
     losses = 0
     n_frames = 0
+    acc_metric_avg = Accuracy(task='multiclass', num_classes=3, average='macro')
+    acc_metric = Accuracy(task='multiclass', num_classes=3, average=None)
 
     for samples in tqdm(dataloader, total=len(dataloader)):
 
@@ -201,12 +223,20 @@ def evaluate(encoder,
         logits = classifier(encodings)
 
         loss = criterion(logits, labels)
+        preds = nn.functional.softmax(logits, dim=1)
+        acc_avg = acc_metric_avg(preds, labels)
+        acc = acc_metric(preds, labels)
 
         losses += loss.item()
         n_frames += len(labels)
+        wandb.log({"val_loss": loss.item(),
+                   "val_acc": acc_avg,
+                   "val_acc_per_class": acc})
 
-    return losses / n_frames
+    return losses / n_frames, acc_metric_avg.compute(), acc_metric.compute()
 
 
 if __name__ == '__main__':
+    wandb.login()
     main()
+    wandb.finish()

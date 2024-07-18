@@ -5,3 +5,6 @@ data/
 global-exclude __pycache__
 
 src.egg-info/
+
+# checkpoints
+checkpoints/
