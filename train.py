@@ -40,7 +40,8 @@ def main():
     batch_size = 2
     hidden_dim = 768
     lr = 1e-4
-    weights = torch.Tensor([0.3441, 32.8396, 15.6976])
+    weights = torch.Tensor([0.3441, 32.8396, 15.6976]).to(DEVICE)
+    workers = 2
 
     # create dataset
     metadata_path = data_path / 'circumferences/fetal_abdominal_circumferences_per_sweep.csv'
@@ -52,8 +53,7 @@ def main():
         break
 
     preproc_transforms = Compose([
-                        ScaleIntensity(),
-                        EnsureType()
+                        ScaleIntensity()
                     ])
     # frame_transforms = Compose([
     #             RandGaussianSmooth(prob=0.1),
@@ -72,20 +72,21 @@ def main():
     train_dl = DataLoader(train_dataset,
                           batch_size=batch_size,
                           shuffle=True,
-                          num_workers=4,
+                          num_workers=workers,
                           collate_fn=my_collate_fn)
     val_dl = DataLoader(val_dataset,
                         batch_size=batch_size,
                         shuffle=False,
-                        num_workers=4,
+                        num_workers=workers,
                         collate_fn=my_collate_fn)
-
+    print(f'Dataset sizes: train={len(train_dataset)}, val={len(val_dataset)}')
     # create models and move to device
     encoder, projector, transformer, classifier = build_models(hidden_dim)
     encoder.to(DEVICE)
     projector.to(DEVICE)
     transformer.to(DEVICE)
     classifier.to(DEVICE)
+    print('Models created and moved to device')
 
     # optimizer
     params = list(projector.parameters()) + list(transformer.parameters()) \
@@ -95,7 +96,7 @@ def main():
     criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
 
     NUM_EPOCHS = 20
-
+    print('Starting training')
     for epoch in range(1, NUM_EPOCHS+1):
         start_time = timer()
         train_loss = train_epoch(encoder,
@@ -132,9 +133,9 @@ def train_epoch(encoder,
 
     losses = 0
     n_frames = 0
-
-    for samples in tqdm(dataloader, total=len(list(dataloader))):
-
+    print('Starting epoch loop')
+    for samples in tqdm(dataloader, total=len(dataloader)):
+        # print(type(samples), samples[0]['image'].shape, samples[1]['image'].shape)
         # model fwd
         encodings = []
         labels = []
@@ -150,7 +151,7 @@ def train_epoch(encoder,
 
         # classifier
         encodings = encodings[~masks, :]
-        labels = torch.cat(labels)
+        labels = torch.cat(labels).to(DEVICE)
         logits = classifier(encodings)
 
         optimizer.zero_grad()
@@ -179,7 +180,7 @@ def evaluate(encoder,
     losses = 0
     n_frames = 0
 
-    for samples in tqdm(dataloader, total=len(list(dataloader))):
+    for samples in tqdm(dataloader, total=len(dataloader)):
 
         # model fwd
         encodings = []
