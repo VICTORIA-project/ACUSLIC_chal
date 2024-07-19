@@ -112,5 +112,6 @@ class AcouslicDatasetFull(Dataset):
         assert frames_imgs.shape[0] == frames_labels.shape[0]
 
         return {'image': frames_imgs,
-                'labels': frames_labels}
+                'labels': frames_labels,
+                'uuid': uuid}
     

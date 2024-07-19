@@ -19,6 +19,8 @@ from src.models.frame_detector import build_models
 from src.datasets.acouslic_dataset import AcouslicDatasetFull
 import wandb
 from torchmetrics.classification import Accuracy
+from datetime import datetime
+import sys
 
 this_path = Path().resolve()
 repo_path = Path.cwd().resolve()
@@ -39,34 +41,40 @@ def compute_weights(metadata_path: Path):
 
 
 def main():
+    NUM_EPOCHS = 20
     batch_size = 2
     hidden_dim = 768
     lr = 1e-4
     weights = torch.Tensor([0.3441, 32.8396, 15.6976]).to(DEVICE)
     workers = 2
-
+    exp_name = f'{sys.argv[1]}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
+    ckpt_path = repo_path / f'checkpoints/{exp_name}'
+    ckpt_path.mkdir(parents=True, exist_ok=True)
     config = {
             "hidden_dim": hidden_dim,
             "batch_size": batch_size,
             "lr": lr,
             "loss_weights": weights,
-            "n_workers": workers
+            "n_workers": workers,
+            "device": DEVICE,
+            "ckpt_path": ckpt_path,
+            "exp_name": exp_name,
+            "num_epochs": NUM_EPOCHS
         }
     run = wandb.init(
-            project="cat-classification",
-            notes="My first experiment",
-            tags=["baseline", "paper1"],
+            name=exp_name,
+            project="frame-detection",
+            tags=["baseline"],
             config=config,
             settings=wandb.Settings(code_dir=".")
         )
-
+    print('Experiment name: ', exp_name)
     # create dataset
     metadata_path = data_path / 'circumferences/fetal_abdominal_circumferences_per_sweep.csv'
     df = pd.read_csv(metadata_path)
     kf = KFold(n_splits=5, shuffle=True, random_state=0)
     for fold_n, (train_ids, val_ids) in enumerate(kf.split(df.subject_id.unique())):
         # print(train_ids, val_ids)
-        print(len(train_ids), len(val_ids))
         break
 
     preproc_transforms = Compose([
@@ -114,25 +122,45 @@ def main():
 
     NUM_EPOCHS = 20
     print('Starting training')
+    min_val_loss = float('inf')
     for epoch in range(1, NUM_EPOCHS+1):
         start_time = timer()
-        train_loss = train_epoch(encoder,
-                                 projector,
-                                 transformer,
-                                 classifier,
-                                 optimizer,
-                                 criterion,
-                                 train_dl)
+        train_loss, train_acc_avg = train_epoch(encoder,
+                                                projector,
+                                                transformer,
+                                                classifier,
+                                                optimizer,
+                                                criterion,
+                                                train_dl)
         end_time = timer()
-        val_loss, acc_avg, acc = evaluate(encoder,
-                            projector,
-                            transformer,
-                            classifier,
-                            criterion,
-                            val_dl)
-
-        print((f'Epoch: {epoch}, Train loss: {train_loss:.3f}, '
-               f'Val loss: {val_loss:.3f}, acc_avg: {acc_avg}, avg: {acc}'
+        wandb.log({"epoch": epoch,
+                   "train_acc/epoch": train_acc_avg.item(),
+                   "train_loss/epoch": train_loss})
+        val_loss, val_acc_avg, val_acc = evaluate(encoder,
+                                                  projector,
+                                                  transformer,
+                                                  classifier,
+                                                  criterion,
+                                                  val_dl)
+        if val_loss < min_val_loss:
+            min_val_loss = val_loss
+            torch.save({'epoch': epoch,
+                        'projector_state_dict': projector.state_dict(),
+                        'transformer_state_dict': transformer.state_dict(),
+                        'classifier_state_dict': classifier.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': min_val_loss,
+                        }, ckpt_path/'best_model.pt')
+            
+        wandb.log({"epoch": epoch,
+                   "val_acc/epoch": val_acc_avg.item(),
+                   "val_loss/epoch": val_loss,
+                   "val_acc_c0": val_acc[0].item(),
+                   "val_acc_c1": val_acc[1].item(),
+                   "val_acc_c2": val_acc[2].item()})
+        
+        print((f'Epoch: {epoch}, Train loss: {train_loss:.3f}, acc_avg: {train_acc_avg}, \n'
+               f'Val loss: {val_loss:.3f}, acc_avg: {val_acc_avg}, acc (per class): {val_acc} \n'
                f'Epoch time (total) = {(end_time - start_time):.3f}s'))
 
 
@@ -148,11 +176,73 @@ def train_epoch(encoder,
     transformer.train()
     classifier.train()
 
-    acc_metric_avg = Accuracy(task='multiclass', num_classes=3, average='macro')
+    acc_metric_avg = Accuracy(task='multiclass',
+                              num_classes=3,
+                              average='macro').to(DEVICE)
     losses = 0
     n_frames = 0
     for samples in tqdm(dataloader, total=len(dataloader)):
-        # print(type(samples), samples[0]['image'].shape, samples[1]['image'].shape)
+        # model fwd
+        encodings = []
+        labels = []
+        for sample in samples:
+            image = sample['image'].unsqueeze(1).unsqueeze(0).to(DEVICE)
+            with torch.no_grad():
+                output = encoder(image)
+            output = projector(output)
+            encodings.append(output)
+            labels.append(sample['labels'])
+
+        encodings, masks = transformer(encodings)
+
+        # classifier
+        encodings = encodings[~masks, :]
+        labels = torch.cat(labels).to(DEVICE)
+        logits = classifier(encodings)
+        if logits.shape[0] != labels.shape[0]:
+            print('Logits and labels shape mismatch')
+            print(f'Logits: {logits.shape}, labels: {labels.shape}')
+            print(f'S1: {samples[0]["uuid"]}, S2: {samples[1]["uuid"]}')
+
+        optimizer.zero_grad()
+
+        loss = criterion(logits, labels)
+        loss.backward()
+        preds = nn.functional.softmax(logits, dim=1)
+        acc_avg = acc_metric_avg(preds, labels)
+
+        optimizer.step()
+        losses += loss.item()
+        n_frames += len(labels)
+        wandb.log({"train_loss": loss.item(), "train_acc": acc_avg.item()})
+
+    return losses / n_frames, acc_metric_avg.compute()
+
+
+def evaluate(encoder,
+             projector,
+             transformer,
+             classifier,
+             criterion,
+             dataloader):
+
+    projector.eval()
+    transformer.eval()
+    classifier.eval()
+
+    losses = 0
+    n_frames = 0
+    preds = []
+    ground_truth = []
+    acc_metric_avg = Accuracy(task='multiclass',
+                              num_classes=3,
+                              average='macro').to(DEVICE)
+    acc_metric = Accuracy(task='multiclass',
+                          num_classes=3,
+                          average=None).to(DEVICE)
+
+    for samples in tqdm(dataloader, total=len(dataloader)):
+
         # model fwd
         encodings = []
         labels = []
@@ -171,68 +261,27 @@ def train_epoch(encoder,
         labels = torch.cat(labels).to(DEVICE)
         logits = classifier(encodings)
 
-        optimizer.zero_grad()
-
         loss = criterion(logits, labels)
-        loss.backward()
-        preds = nn.functional.softmax(logits, dim=1)
-        acc_avg = acc_metric_avg(preds, labels)
-
-        optimizer.step()
-        losses += loss.item()
-        n_frames += len(labels)
-        wandb.log({"train_loss": loss.item(), "train_acc": acc_avg})
-
-    return losses / n_frames, acc_metric_avg.compute()
-
-
-def evaluate(encoder,
-             projector,
-             transformer,
-             classifier,
-             criterion,
-             dataloader):
-
-    projector.eval()
-    transformer.eval()
-    classifier.eval()
-
-    losses = 0
-    n_frames = 0
-    acc_metric_avg = Accuracy(task='multiclass', num_classes=3, average='macro')
-    acc_metric = Accuracy(task='multiclass', num_classes=3, average=None)
-
-    for samples in tqdm(dataloader, total=len(dataloader)):
-
-        # model fwd
-        encodings = []
-        labels = []
-        for sample in samples:
-            image = sample['image'].unsqueeze(1).unsqueeze(0).to(DEVICE)
-            with torch.no_grad():
-                output = encoder(image)
-            output = projector(output)
-            encodings.append(output)
-            labels.append(sample['labels'])
-
-        encodings, masks = transformer(encodings)
-
-        # classifier
-        encodings = encodings[~masks, :]
-        labels = torch.cat(labels)
-        logits = classifier(encodings)
-
-        loss = criterion(logits, labels)
-        preds = nn.functional.softmax(logits, dim=1)
-        acc_avg = acc_metric_avg(preds, labels)
-        acc = acc_metric(preds, labels)
+        probs = nn.functional.softmax(logits, dim=1)
+        acc_avg = acc_metric_avg(probs, labels)
+        acc = acc_metric(probs, labels)
 
         losses += loss.item()
         n_frames += len(labels)
         wandb.log({"val_loss": loss.item(),
-                   "val_acc": acc_avg,
-                   "val_acc_per_class": acc})
+                   "val_acc": acc_avg.item(),
+                   "val_acc_c0": acc[0].item(),
+                   "val_acc_c1": acc[1].item(),
+                   "val_acc_c2": acc[2].item()})
+        preds.append(probs.argmax(dim=1))
+        ground_truth.append(labels)
 
+    preds = torch.Tensor(torch.cat(preds)).to(torch.uint8)
+    ground_truth = torch.Tensor(torch.cat(ground_truth)).to(torch.uint8)
+    wandb.log({"conf_matrix/val": wandb.plot.confusion_matrix( 
+        preds=preds, y_true=ground_truth,
+        class_names=['bckg', 'optimal', 'suboptimal'])})
+   
     return losses / n_frames, acc_metric_avg.compute(), acc_metric.compute()
 
 

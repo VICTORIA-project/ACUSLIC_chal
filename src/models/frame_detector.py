@@ -86,7 +86,9 @@ class YNetEncoder(nn.Module):
 def create_mask(src, pad_value=0):
     src_seq_len = src.shape[1]
     src_mask = torch.zeros((src_seq_len, src_seq_len), device=src.device).type(torch.bool)
-    src_padding_mask = torch.any(src == pad_value, dim=(2))
+    # src_padding_mask = torch.any(src == pad_value, dim=(2))
+    src_padding_mask = torch.all(src == pad_value, dim=(2))
+
     #(src == padding_value)
    
     return src_mask, src_padding_mask
