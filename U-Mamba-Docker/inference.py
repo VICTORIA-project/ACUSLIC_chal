@@ -60,11 +60,16 @@ def run():
         fetal_abdomen_postprocessed)
 
     # Save your output
+    output_file_path = OUTPUT_PATH / "images/fetal-abdomen-segmentation/output.mha"
     write_array_as_image_file(
         location=OUTPUT_PATH / "images/fetal-abdomen-segmentation",
         array=fetal_abdomen_segmentation,
         frame_number=fetal_abdomen_frame_number,
     )
+
+    # Set permissions to rw-rw-r--
+    os.chmod(output_file_path, 0o664)
+
     write_json_file(
         location=OUTPUT_PATH / "fetal-abdomen-frame-number.json",
         content=fetal_abdomen_frame_number

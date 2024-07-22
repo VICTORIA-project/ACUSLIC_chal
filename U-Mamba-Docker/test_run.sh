@@ -13,15 +13,11 @@ OUTPUT_DIR="${SCRIPT_DIR}/test/output"
 
 echo "=+= Cleaning up any earlier output"
 if [ -d "$OUTPUT_DIR" ]; then
-  echo "Directory exists: $OUTPUT_DIR"
-  
-  # Use Docker to forcefully remove the contents of the directory
-  docker run --rm -it --privileged -v "$OUTPUT_DIR":/mnt alpine sh -c "rm -rf /mnt/*"
-  
   # Ensure permissions are setup correctly
+  # This allows for the Docker user to write to this location
+  rm -rf "${OUTPUT_DIR}"/*
   chmod -f o+rwx "$OUTPUT_DIR"
 else
-  echo "Directory does not exist, creating: $OUTPUT_DIR"
   mkdir --mode=o+rwx "$OUTPUT_DIR"
 fi
 
@@ -44,7 +40,7 @@ docker volume create "$DOCKER_NOOP_VOLUME"
 docker run --rm \
     --platform=linux/amd64 \
     --network none \
-    --gpus device=1 \
+    --gpus all \
     --volume "$INPUT_DIR":/input \
     --volume "$OUTPUT_DIR":/output \
     --volume "$DOCKER_NOOP_VOLUME":/tmp \
@@ -58,7 +54,8 @@ docker run --rm \
     --env HOST_UID=`id --user` \
     --env HOST_GID=`id --group` \
     --volume "${OUTPUT_DIR}":/output \
-    acouslic-2:latest \
-    /bin/sh -c 'chown -R ${HOST_UID}:${HOST_GID} /output'
+    alpine:latest \
+    /bin/sh -c 'chown -R ${HOST_UID}:${HOST_GID} /output && chmod -R 775 /output && find /output -type f -name "*.mha" -exec chmod 664 {} \;'
 
 echo "=+= Wrote results to ${OUTPUT_DIR}"
+

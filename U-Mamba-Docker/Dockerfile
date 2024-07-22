@@ -1,11 +1,9 @@
 FROM pytorch/pytorch:2.2.0-cuda11.8-cudnn8-devel
+
 # Use a 'large' base container to show-case how to load pytorch and use the GPU (when enabled)
 
 # Ensures that Python output to stdout/stderr is not buffered: prevents missing information when terminating
 ENV PYTHONUNBUFFERED 1
-
-# Install git
-RUN apt-get update && apt-get install -y git
 
 RUN groupadd -r user && useradd -m --no-log-init -r -g user user
 USER user
