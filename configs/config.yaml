@@ -1,0 +1,27 @@
+train:
+  num_epochs: 150
+
+loss:
+  name: cross_entropy
+  class_weights: 
+  - 0.3441
+  - 32.8396
+  - 15.6976
+  # name: focal
+  # alpha:
+  # - 0.0103
+  # - 0.9852
+  # - 0.4709
+  # gamma: 2.0
+
+dataset:
+  num_workers: 2
+  batch_size: 2
+
+model:
+  hidden_dim: 768
+
+optimizer:
+  name: adam
+  lr: 0.0001
+

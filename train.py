@@ -21,6 +21,7 @@ import wandb
 from torchmetrics.classification import Accuracy
 from datetime import datetime
 import sys
+import yaml
 
 this_path = Path().resolve()
 repo_path = Path.cwd().resolve()
@@ -41,31 +42,22 @@ def compute_weights(metadata_path: Path):
 
 
 def main():
-    NUM_EPOCHS = 20
-    batch_size = 2
-    hidden_dim = 768
-    lr = 1e-4
-    weights = torch.Tensor([0.3441, 32.8396, 15.6976]).to(DEVICE)
-    workers = 2
+    with open('../config/config.yaml', 'r') as f:
+        cfg = list(yaml.load_all(f, yaml.SafeLoader))[0]
+
+    NUM_EPOCHS = cfg['train']['num_epochs']
+    batch_size = cfg['dataset']['batch_size']
+    workers = cfg['dataset']['num_workers']
+    hidden_dim = cfg['model']['hidden_dim']
     exp_name = f'{sys.argv[1]}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
     ckpt_path = repo_path / f'checkpoints/{exp_name}'
     ckpt_path.mkdir(parents=True, exist_ok=True)
-    config = {
-            "hidden_dim": hidden_dim,
-            "batch_size": batch_size,
-            "lr": lr,
-            "loss_weights": weights,
-            "n_workers": workers,
-            "device": DEVICE,
-            "ckpt_path": ckpt_path,
-            "exp_name": exp_name,
-            "num_epochs": NUM_EPOCHS
-        }
+
     run = wandb.init(
             name=exp_name,
             project="frame-detection",
             tags=["baseline"],
-            config=config,
+            config=cfg,
             settings=wandb.Settings(code_dir=".")
         )
     print('Experiment name: ', exp_name)
@@ -105,6 +97,7 @@ def main():
                         num_workers=workers,
                         collate_fn=my_collate_fn)
     print(f'Dataset sizes: train={len(train_dataset)}, val={len(val_dataset)}')
+    
     # create models and move to device
     encoder, projector, transformer, classifier = build_models(hidden_dim)
     encoder.to(DEVICE)
@@ -116,11 +109,29 @@ def main():
     # optimizer
     params = list(projector.parameters()) + list(transformer.parameters()) \
         + list(classifier.parameters())
-    optimizer = torch.optim.Adam(params, lr=lr, betas=(0.9, 0.999))
+    
+    lr = cfg['optimizer']['lr']    
+    if cfg['optimizer']['name'] == 'adam':
+        optimizer = torch.optim.Adam(params, lr=lr, betas=(0.9, 0.999))
 
-    criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
+    # loss
+    if cfg['loss']['name'] == 'cross_entropy':
+        weights = cfg['loss']['class_weights']
+        weights = torch.Tensor(weights).to(DEVICE)
+        criterion = nn.CrossEntropyLoss(
+            weight=weights,
+            reduction='mean')
+    elif cfg['loss']['name'] == 'focal':
+        alpha = cfg['loss']['alpha']
+        criterion = torch.hub.load(
+            'adeelh/pytorch-multi-class-focal-loss',
+            model='FocalLoss',
+            alpha=torch.tensor(alpha),
+            gamma=cfg['loss']['gamma'],
+            reduction='mean',
+            force_reload=False
+)
 
-    NUM_EPOCHS = 20
     print('Starting training')
     min_val_loss = float('inf')
     for epoch in range(1, NUM_EPOCHS+1):
