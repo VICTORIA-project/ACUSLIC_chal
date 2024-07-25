@@ -39,6 +39,9 @@ docker run --rm \
     --platform=linux/amd64 \
     --network none \
     --gpus all \
+    --cpus="4" \
+    --memory="16g" \
+    --memory-swap="16g" \
     --volume "$INPUT_DIR":/input \
     --volume "$OUTPUT_DIR":/output \
     --volume "$DOCKER_NOOP_VOLUME":/tmp \
