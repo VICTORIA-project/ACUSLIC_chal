@@ -81,7 +81,7 @@ class FetalAbdomenSegmentation(SegmentationAlgorithm):
         """
         # Define the postprocessing configurations
         configs = {
-            "soft_threshold": 0.5,
+            "soft_threshold": 0.75,
         }
 
         # Postprocess the probability map
@@ -151,7 +151,7 @@ class MedNeXtSegmentation(SegmentationAlgorithm):
         """
         # Define the postprocessing configurations
         configs = {
-            "soft_threshold": 0.5,
+            "soft_threshold": 0.75,
         }
 
         # Postprocess the probability map
