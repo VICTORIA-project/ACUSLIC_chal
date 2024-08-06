@@ -54,14 +54,25 @@ def run():
     mednext_prob_map = mednext_algorithm.predict(
         stacked_fetal_ultrasound_path, save_probabilities=True)
     
+    combined_prob_map = average_probability_maps(umamba_prob_map, mednext_prob_map)
+
+    fetal_abdomen_postprocessed = mednext_algorithm.postprocess(combined_prob_map)
+
     # Apply post-processing
-    umamba_postprocessed = umamba_algorithm.postprocess(
-        umamba_prob_map)    
-    mednext_postprocessed = mednext_algorithm.postprocess(
-        mednext_prob_map)
+    # umamba_postprocessed = umamba_algorithm.postprocess(
+    #     umamba_prob_map)    
+    # mednext_postprocessed = mednext_algorithm.postprocess(
+    #     mednext_prob_map)
+
+    # Define weights for the models
+    # umamba_weight = 0.5  # Higher weight
+    # mednext_weight = 0.5  # Lower weight
 
     # Apply majority voting:
-    fetal_abdomen_postprocessed = majority_voting(umamba_postprocessed, mednext_postprocessed)
+    # fetal_abdomen_postprocessed = majority_voting(umamba_postprocessed, mednext_postprocessed)
+
+    # Apply weighted majority voting:
+    # fetal_abdomen_postprocessed = weighted_majority_voting(umamba_postprocessed, mednext_postprocessed, umamba_weight, mednext_weight)
 
     # Select the fetal abdomen mask and the corresponding frame number
     fetal_abdomen_segmentation, fetal_abdomen_frame_number = select_fetal_abdomen_mask_and_frame(
@@ -99,12 +110,18 @@ def run():
     return 0
 
 
+def average_probability_maps(prob_map1, prob_map2):
+    """
+    Average the probability maps from two models.
+    """
+    return (prob_map1 + prob_map2) / 2
+
 def majority_voting(pred1, pred2):
     """
     Combine predictions from two models using majority voting for multi-class segmentation.
     """
     # Initialize the combined prediction array
-    combined_pred = np.zeros_like(pred1, dtype=np.int32)
+    combined_pred = np.zeros_like(pred1, dtype=np.int8)
 
     # Ensure pred1 and pred2 are 3D arrays of the same shape
     if pred1.shape != pred2.shape:
@@ -131,6 +148,45 @@ def majority_voting(pred1, pred2):
 
                 # Assign the class with the most votes to the combined prediction
                 combined_pred[frame, i, j] = np.argmax(votes)
+
+    return combined_pred
+
+def weighted_majority_voting(pred1, pred2, weight1, weight2):
+    """
+    Combine predictions from two models using weighted majority voting for multi-class segmentation.
+    """
+    # Initialize the combined prediction array
+    combined_pred = np.zeros_like(pred1, dtype=np.int32)
+
+    # Ensure pred1 and pred2 are 3D arrays of the same shape
+    if pred1.shape != pred2.shape:
+        raise ValueError("Shape mismatch: pred1 and pred2 must have the same shape")
+
+    # Iterate over each 2D frame
+    for frame in range(pred1.shape[0]):
+        # Get the 2D slices for the current frame
+        pred1_slice = pred1[frame]
+        pred2_slice = pred2[frame]
+        
+        # Get the number of classes from the predictions
+        num_classes = np.max([pred1_slice.max(), pred2_slice.max()]) + 1
+
+        # Initialize an array to store the weighted votes
+        weighted_votes = np.zeros((pred1_slice.shape[0], pred1_slice.shape[1], num_classes))
+
+        # Iterate over each pixel in the 2D frame
+        for i in range(pred1_slice.shape[0]):
+            for j in range(pred1_slice.shape[1]):
+                # Get the class predictions for the current pixel from both models
+                class_pred1 = pred1_slice[i, j]
+                class_pred2 = pred2_slice[i, j]
+
+                # Add weighted votes for each class
+                weighted_votes[i, j, class_pred1] += weight1
+                weighted_votes[i, j, class_pred2] += weight2
+
+                # Assign the class with the most weighted votes to the combined prediction
+                combined_pred[frame, i, j] = np.argmax(weighted_votes[i, j])
 
     return combined_pred
 
