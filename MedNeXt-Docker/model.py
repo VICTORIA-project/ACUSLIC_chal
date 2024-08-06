@@ -102,14 +102,16 @@ def select_fetal_abdomen_mask_and_frame(segmentation_masks: np.ndarray) -> tuple
         area_class_1 = np.sum(segmentation_masks[frame] == 1)
         area_class_2 = np.sum(segmentation_masks[frame] == 2)
 
-        # If the area of class 1 or class 2 in the current 2D image is larger than the largest area found so far,
+        # Check if both classes are present in the current frame
+        if area_class_1 > 0 and area_class_2 > 0:
+            combined_area = area_class_1 + area_class_2
+        else:
+            combined_area = max(area_class_1, area_class_2)
+
+        # If the combined area in the current 2D image is larger than the largest area found so far,
         # update the largest area and the selected image
-        if area_class_1 > largest_area:
-            largest_area = area_class_1
-            selected_image = segmentation_masks[frame]
-            fetal_abdomen_frame_number = frame
-        elif area_class_2 > largest_area:
-            largest_area = area_class_2
+        if combined_area > largest_area:
+            largest_area = combined_area
             selected_image = segmentation_masks[frame]
             fetal_abdomen_frame_number = frame
 
