@@ -39,3 +39,5 @@ Experiments/ex_0/AC_005_01_gt.nii.gz
 Experiments/ex_0/AC_005_01_pred.nii.gz
 Dual-model-Docker/resources/fov_mask/fov_mask.mha
 MedNeXt-Docker/resources/fov_mask/fov_mask.mha
+Dual-model-Docker/test/input/images/stacked-fetal-ultrasound/04a04f2e-840b-47f8-a907-abe7aeab3f41_1_0000.mha
+.gitignore
