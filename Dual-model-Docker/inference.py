@@ -25,8 +25,9 @@ from pathlib import Path
 import numpy as np
 import SimpleITK
 
-from model import FetalAbdomenSegmentation, select_fetal_abdomen_mask_and_frame, MedNeXtSegmentation
 
+from model import FetalAbdomenSegmentation, select_fetal_abdomen_mask_and_frame, MedNeXtSegmentation
+from postprocess_probability_maps import fit_ellipses
 INPUT_PATH = Path("/input")
 OUTPUT_PATH = Path("/output")
 RESOURCE_PATH = Path("resources")
@@ -58,25 +59,13 @@ def run():
 
     fetal_abdomen_postprocessed = mednext_algorithm.postprocess(combined_prob_map)
 
-    # Apply post-processing
-    # umamba_postprocessed = umamba_algorithm.postprocess(
-    #     umamba_prob_map)    
-    # mednext_postprocessed = mednext_algorithm.postprocess(
-    #     mednext_prob_map)
-
-    # Define weights for the models
-    # umamba_weight = 0.5  # Higher weight
-    # mednext_weight = 0.5  # Lower weight
-
-    # Apply majority voting:
-    # fetal_abdomen_postprocessed = majority_voting(umamba_postprocessed, mednext_postprocessed)
-
-    # Apply weighted majority voting:
-    # fetal_abdomen_postprocessed = weighted_majority_voting(umamba_postprocessed, mednext_postprocessed, umamba_weight, mednext_weight)
-
     # Select the fetal abdomen mask and the corresponding frame number
     fetal_abdomen_segmentation, fetal_abdomen_frame_number = select_fetal_abdomen_mask_and_frame(
         fetal_abdomen_postprocessed)
+
+    # Ensure a Full ellipsoidal mask:
+    _, _, _, fetal_abdomen_segmentation = fit_ellipses(fetal_abdomen_segmentation)
+    fetal_abdomen_segmentation = (fetal_abdomen_segmentation > 0).astype(np.uint8)
 
     # Save your output
     output_file_path = OUTPUT_PATH / "images/fetal-abdomen-segmentation/output.mha"

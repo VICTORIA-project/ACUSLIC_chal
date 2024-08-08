@@ -42,7 +42,7 @@ class FetalAbdomenSegmentation(SegmentationAlgorithm):
         predictor = nnUNetPredictor(
             tile_step_size=0.5,
             use_gaussian=True,
-            use_mirroring=True,
+            use_mirroring=False,
             device=torch.device('cuda', 0),
             verbose=False,
             verbose_preprocessing=False,

@@ -26,6 +26,8 @@ import numpy as np
 import SimpleITK
 
 from model import FetalAbdomenSegmentation, select_fetal_abdomen_mask_and_frame
+from postprocess_probability_maps import fit_ellipses
+
 
 INPUT_PATH = Path("/input")
 OUTPUT_PATH = Path("/output")
@@ -58,6 +60,10 @@ def run():
     # Select the fetal abdomen mask and the corresponding frame number
     fetal_abdomen_segmentation, fetal_abdomen_frame_number = select_fetal_abdomen_mask_and_frame(
         fetal_abdomen_postprocessed)
+    
+    # Ensure a Full ellipsoidal mask:
+    _, _, _, fetal_abdomen_segmentation = fit_ellipses(fetal_abdomen_segmentation)
+    fetal_abdomen_segmentation = (fetal_abdomen_segmentation > 0).astype(np.uint8)
 
     # Save your output
     output_file_path = OUTPUT_PATH / "images/fetal-abdomen-segmentation/output.mha"

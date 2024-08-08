@@ -37,3 +37,5 @@ Dual-model-Docker/resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_
 Experiments/ex_0/AC_005_01_0000.nii.gz
 Experiments/ex_0/AC_005_01_gt.nii.gz
 Experiments/ex_0/AC_005_01_pred.nii.gz
+Dual-model-Docker/resources/fov_mask/fov_mask.mha
+MedNeXt-Docker/resources/fov_mask/fov_mask.mha
