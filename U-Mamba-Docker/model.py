@@ -88,36 +88,40 @@ class FetalAbdomenSegmentation(SegmentationAlgorithm):
         return mask_postprocessed
 
 
-def select_fetal_abdomen_mask_and_frame(segmentation_masks: np.ndarray) -> tuple[np.ndarray, int]: #(np.ndarray, int):
+def select_fetal_abdomen_mask_and_frame(segmentation_masks: np.ndarray) -> tuple[np.ndarray, int]:
     """
     Select the fetal abdomen mask and the corresponding frame number from the segmentation masks
     """
-    # Initialize variables to keep track of the largest area and the corresponding 2D image
+    # Initialize variables to keep track of the largest area and the corresponding frame number
     largest_area = 0
     selected_image = None
+    fetal_abdomen_frame_number = -1
 
     # Iterate over the 2D images in the 3D array
-    for frame in range(len(segmentation_masks)):
-        # Calculate the areas for class 1 and class 2 in the current 2D image
-        area_class_1 = np.sum(segmentation_masks[frame] == 1)
-        area_class_2 = np.sum(segmentation_masks[frame] == 2)
-
-        # If the area of class 1 or class 2 in the current 2D image is larger than the largest area found so far,
+    for frame in range(segmentation_masks.shape[0]):
+        current_frame = segmentation_masks[frame]
+        
+        # Check if both classes are present in the current frame
+        if np.any(current_frame == 1) and np.any(current_frame == 2):
+            area_class_1 = np.sum(current_frame == 1)
+            area_class_2 = np.sum(current_frame == 2)
+            combined_area = area_class_1 + area_class_2
+        else:
+            area_class_1 = np.sum(current_frame == 1)
+            area_class_2 = np.sum(current_frame == 2)
+            combined_area = max(area_class_1, area_class_2)
+        
+        # If the combined area in the current 2D image is larger than the largest area found so far,
         # update the largest area and the selected image
-        if area_class_1 > largest_area:
-            largest_area = area_class_1
-            selected_image = segmentation_masks[frame]
-            fetal_abdomen_frame_number = frame
-        elif area_class_2 > largest_area:
-            largest_area = area_class_2
-            selected_image = segmentation_masks[frame]
+        if combined_area > largest_area:
+            largest_area = combined_area
+            selected_image = current_frame
             fetal_abdomen_frame_number = frame
 
-    # If no 2D image with a positive area was found, provide an empty segmentation mask and set the frame number to -1
+    # If no 2D image with a positive area was found, provide an empty segmentation mask
     if selected_image is None:
         selected_image = np.zeros_like(segmentation_masks[0])
-        fetal_abdomen_frame_number = -1
-
+    
     # Convert the selected image to a binary mask
     selected_image = (selected_image > 0).astype(np.uint8)
     return selected_image, fetal_abdomen_frame_number
