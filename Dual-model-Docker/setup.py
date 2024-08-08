@@ -35,7 +35,7 @@ setup(name='nnunetv2',
           "imagecodecs",
           "yacs",
           "monai==1.3.0",
-          "opencv-python",
+          "opencv-python-headless",
           "evalutils==0.4.2"
       ],
       entry_points={
