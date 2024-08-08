@@ -1,0 +1,9 @@
+# sh (and their template counter parts) should always be lf their line endings
+*.sh text=lf eol=lf
+*.sh.j2 text=lf eol=lf
+*.pth filter=lfs diff=lfs merge=lfs -text
+resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_0/checkpoint_final.pth filter=lfs diff=lfs merge=lfs -text
+resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_1/checkpoint_final.pth filter=lfs diff=lfs merge=lfs -text
+resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_2/checkpoint_final.pth filter=lfs diff=lfs merge=lfs -text
+resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_3/checkpoint_final.pth filter=lfs diff=lfs merge=lfs -text
+resources/nnUNet_results/Dataset001_US/nnUNetTrainerUMambaBot_100epochs__nnUNetPlans__2d/fold_4/checkpoint_final.pth filter=lfs diff=lfs merge=lfs -text
