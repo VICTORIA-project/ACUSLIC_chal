@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import threading
 import numpy as np
 import torch
 from batchgenerators.utilities.file_and_folder_operations import join
@@ -33,7 +34,7 @@ class FetalAbdomenSegmentation(SegmentationAlgorithm):
         self.predictor = self.initialize_predictor()
 
     def initialize_predictor(self, task="Dataset001_US",
-                             network="2d", checkpoint="checkpoint_final.pth", folds=(0,1,2,3,4)):
+                             network="2d", checkpoint="checkpoint_final.pth", folds=(0,1,2,3)):
         """
         Initializes the nnUNet predictor
         """
@@ -88,19 +89,18 @@ class FetalAbdomenSegmentation(SegmentationAlgorithm):
         return mask_postprocessed
 
 
-def select_fetal_abdomen_mask_and_frame(segmentation_masks: np.ndarray) -> tuple[np.ndarray, int]:
+def select_fetal_abdomen_mask_and_frame(segmentation_masks: np.ndarray, result: dict) -> None:
     """
-    Select the fetal abdomen mask and the corresponding frame number from the segmentation masks
+    Select the fetal abdomen mask and the corresponding frame number from the segmentation masks.
+    Updates the result dictionary with the best selection found before timeout.
     """
-    # Initialize variables to keep track of the largest area and the corresponding frame number
     largest_area = 0
     selected_image = None
     fetal_abdomen_frame_number = -1
 
-    # Iterate over the 2D images in the 3D array
     for frame in range(segmentation_masks.shape[0]):
         current_frame = segmentation_masks[frame]
-        
+
         # Check if both classes are present in the current frame
         if np.any(current_frame == 1) and np.any(current_frame == 2):
             area_class_1 = np.sum(current_frame == 1)
@@ -110,18 +110,37 @@ def select_fetal_abdomen_mask_and_frame(segmentation_masks: np.ndarray) -> tuple
             area_class_1 = np.sum(current_frame == 1)
             area_class_2 = np.sum(current_frame == 2)
             combined_area = max(area_class_1, area_class_2)
-        
-        # If the combined area in the current 2D image is larger than the largest area found so far,
-        # update the largest area and the selected image
+
         if combined_area > largest_area:
             largest_area = combined_area
             selected_image = current_frame
             fetal_abdomen_frame_number = frame
+            
+            # Update the result dictionary with the latest best values
+            result['largest_area'] = largest_area
+            result['selected_image'] = selected_image
+            result['fetal_abdomen_frame_number'] = fetal_abdomen_frame_number
 
-    # If no 2D image with a positive area was found, provide an empty segmentation mask
     if selected_image is None:
         selected_image = np.zeros_like(segmentation_masks[0])
     
-    # Convert the selected image to a binary mask
     selected_image = (selected_image > 0).astype(np.uint8)
-    return selected_image, fetal_abdomen_frame_number
+    result['selected_image'] = selected_image
+    result['fetal_abdomen_frame_number'] = fetal_abdomen_frame_number
+
+
+def run_with_timeout(func, args=(), kwargs=None, timeout=60):
+    if kwargs is None:
+        kwargs = {}
+
+    result = {'largest_area': 0, 'selected_image': None, 'fetal_abdomen_frame_number': -1}
+    thread = threading.Thread(target=func, args=args + (result,), kwargs=kwargs)
+    thread.start()
+    thread.join(timeout)
+    
+    if thread.is_alive():
+        print(f"Function exceeded {timeout / 60} minutes timeout. Returning the best result achieved so far.")
+        thread.join()  # Ensure the thread has finished or forcefully terminate (Python doesn’t have direct termination)
+    
+    # If the function times out, it returns the best result found so far
+    return result['selected_image'], result['fetal_abdomen_frame_number']
