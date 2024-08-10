@@ -76,8 +76,7 @@ def postprocess_single_probability_map(softmax_prob_map, configs):
 
     # Find the class with the maximum probability at each pixel across all channels
     # This will have shape [n_frames, H, W]
-    masks = np.argmax(softmax_maps, axis=0)
-    masks = masks.astype(np.uint8)
+    masks = np.argmax(softmax_prob_map, axis=0).astype(np.uint8)
 
     # keep the largest connected component for each class
     masks_postprocessed = remove_all_but_largest_component_from_segmentation(
