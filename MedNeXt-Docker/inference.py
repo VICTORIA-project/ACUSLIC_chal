@@ -19,22 +19,29 @@ Happy programming!
 """
 import json
 import os
+import time
+import csv
 from glob import glob
 from pathlib import Path
 
+import threading
 import numpy as np
 import SimpleITK
 
-from model import FetalAbdomenSegmentation, select_fetal_abdomen_mask_and_frame
+from model import FetalAbdomenSegmentation, select_fetal_abdomen_mask_and_frame, run_with_timeout
 from postprocess_probability_maps import fit_ellipses
 
 
 INPUT_PATH = Path("/input")
 OUTPUT_PATH = Path("/output")
 RESOURCE_PATH = Path("resources")
+CSV_LOG_PATH = Path("resources/execution_log.csv")  # Path to the CSV log file
 
 
 def run():
+
+    start_time = time.time()  # Start timing
+
     # Read the input
     stacked_fetal_ultrasound_path = get_image_file_path(
         location=INPUT_PATH / "images/stacked-fetal-ultrasound")
@@ -57,13 +64,17 @@ def run():
     fetal_abdomen_postprocessed = algorithm.postprocess(
         fetal_abdomen_probability_map)
 
-    # Select the fetal abdomen mask and the corresponding frame number
-    fetal_abdomen_segmentation, fetal_abdomen_frame_number = select_fetal_abdomen_mask_and_frame(
-        fetal_abdomen_postprocessed)
-    
-    # Ensure a Full ellipsoidal mask:
-    _, _, _, fetal_abdomen_segmentation = fit_ellipses(fetal_abdomen_segmentation)
-    fetal_abdomen_segmentation = (fetal_abdomen_segmentation > 0).astype(np.uint8)
+    # # Select the fetal abdomen mask and the corresponding frame number
+    # fetal_abdomen_segmentation, fetal_abdomen_frame_number = select_fetal_abdomen_mask_and_frame(
+    #     fetal_abdomen_postprocessed)
+
+    fetal_abdomen_segmentation, fetal_abdomen_frame_number = run_with_timeout(select_fetal_abdomen_mask_and_frame, args=(fetal_abdomen_postprocessed,))
+
+    # If a segmented image is present:
+    if fetal_abdomen_frame_number != -1:
+        # Ensure a Full ellipsoidal mask:
+        _, _, _, fetal_abdomen_segmentation = fit_ellipses(fetal_abdomen_segmentation)
+        fetal_abdomen_segmentation = (fetal_abdomen_segmentation > 0).astype(np.uint8)
 
     # Save your output
     output_file_path = OUTPUT_PATH / "images/fetal-abdomen-segmentation/output.mha"
@@ -94,7 +105,21 @@ def run():
     print(f"frame number: {fetal_abdomen_frame_number}")
     print(type(fetal_abdomen_frame_number))
 
+    end_time = time.time()  # End timing
+    elapsed_time = end_time - start_time
+
+    # Save the input file name and elapsed time to a CSV file
+    save_execution_log(stacked_fetal_ultrasound_path, elapsed_time)
+
+    # print(f"Execution time: {elapsed_time:.2f} seconds")
+
     return 0
+
+def save_execution_log(input_file_path, elapsed_time):
+    # Write the input file name and elapsed time to a CSV file
+    with open(CSV_LOG_PATH, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([input_file_path, elapsed_time])
 
 
 def write_json_file(*, location, content):
